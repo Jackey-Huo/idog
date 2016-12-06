@@ -1,3 +1,7 @@
+# Hello World Example
+#
+# Welcome to the OpenMV IDE! Click on the gear button above to run the script!
+
 import sensor, image, time
 import os
 from pyb import UART
@@ -32,7 +36,20 @@ def check_in_buf(in_buf):
         return False
 
 
-uart.write(''.join(chr(x) for x in out_buf))
+def org_out_buf(cmd, data1=0x00, data2=0x00, data3=0x00, data4=0x00):
+    out_buf[1] = cmd
+    out_buf[2] = data1
+    out_buf[3] = data2
+    out_buf[4] = data3
+    out_buf[5] = data4
+    check_bit = 0
+    for i in range(1, 6):   #calculate check bit
+        check_bit = check_bit + out_buf[i]
+    out_buf[6] = check_bit
+    return ''.join(chr(x) for x in out_buf)
+
+
+uart.write(org_out_buf(0x01, 0x01, 0x21, 0x34))
 
 while(True):
     clock.tick() # Track elapsed milliseconds between snapshots().
