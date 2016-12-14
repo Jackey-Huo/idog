@@ -1,26 +1,45 @@
-# Hello World Example
-#
-# Welcome to the OpenMV IDE! Click on the gear button above to run the script!
 
-import sensor, image, time
-import os
+
+import pyb, sensor, image, math
+import time, os
 from pyb import UART
 from pyb import LED
 
-sensor.reset() # Initialize the camera sensor.
-sensor.set_pixformat(sensor.RGB565) # or sensor.GRAYSCALE
-sensor.set_framesize(sensor.QVGA) # or sensor.QQVGA (or others)
-sensor.skip_frames(10) # Let new settings take affect.
-clock = time.clock() # Tracks FPS.
+sensor.reset()
+sensor.set_framesize(sensor.QVGA)
+sensor.set_pixformat(sensor.GRAYSCALE)
+clock = time.clock()
+roi = (110, 200, 100, 40) #(x, y, w, h)
 
-format_buf  = [0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16]
-out_buf     = [0x68, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x16, 0x0d, 0x0a]
+format_buf  = [0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x68]
+out_buf     = [0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x0d, 0x0a]
 
 uart = UART(3, 9600)
-uart.init(115200, 8, None, 1, timeout=1)
+uart.init(9600, 8, None, 1, timeout=10)
+
+high_threshold = (210, 255)
 
 led = LED(2)
 led.off()
+
+
+
+def find_orient(img, _roi=roi):
+
+    sum_pos = 0
+    count   = 0
+    for x in range(_roi[0], _roi[0] + _roi[2]):
+        for y in range(_roi[1], _roi[1] + _roi[3]):
+            #print(img.get_pixel(x, y))
+            if(img.get_pixel(x, y) == 0):
+                sum_pos = sum_pos + x
+                count   = count + 1
+    img.draw_rectangle(_roi, color=0)
+    print(count)
+    if(count == 0):
+        return 0
+    return sum_pos / count
+
 
 def check_in_buf(in_buf):
     if(len(in_buf) < 8):
@@ -49,6 +68,8 @@ def org_out_buf(cmd, data1=0x00, data2=0x00, data3=0x00, data4=0x00):
     return ''.join(chr(x) for x in out_buf)
 
 
+
+
 uart.write(org_out_buf(0x01, 0x01, 0x21, 0x34))
 
 while(True):
@@ -67,3 +88,15 @@ while(True):
             continue
         print(' '.join(hex(x) for x in in_buf2[1: 6]))
         led.off()
+
+
+while(True):
+    clock.tick()
+    img = sensor.snapshot()
+    #print(clock.fps())
+    img.binary([high_threshold])
+    orient = find_orient(img)
+    print(orient)
+    if( 150 <= orient and orient <= 170):
+        img.draw_string(160, 120, "go ahead!", color=0)
+
