@@ -1,12 +1,5 @@
-# Blob Detection Example
-#
-# This example shows off how to use the find_blobs function to find color
-# blobs in the image. This example in particular looks for dark green objects.
-
-import sensor, image, time, pyb
-
-uart = pyb.UART(3)
-uart.init(500000, 8, None, 1, timeout=10)
+import sensor, pyb
+import PID
 
 led_uart   = pyb.LED(2)
 led_uart.off()
@@ -23,13 +16,6 @@ led_failed.off()
 red_threshold   = (   30,   65,  50,   95,   45,   75)
 # You may need to tweak the above settings for tracking green things...
 # Select an area in the Framebuffer to copy the color settings.
-
-sensor.reset() # Initialize the camera sensor.
-sensor.set_pixformat(sensor.RGB565) # use RGB565.
-sensor.set_framesize(sensor.QVGA) # use QQVGA for speed.
-sensor.skip_frames(20) # Let new settings take affect.
-sensor.set_whitebal(False) # turn this off.
-clock = time.clock() # Tracks FPS.
 
 x_centor_orig_sum = 0
 y_centor_orig_sum = 0
@@ -103,7 +89,13 @@ def get_orig_blob():
     square_orig   = square_orig_sum   / 10
     return (x_centor_orig, y_centor_orig, square_orig)
 
-def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
+#def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
+
+setPID     = lambda pid, func, param: [pid[i].func(param[i]) for i in range(3)]
+outputPID  = lambda pid : [pid[i].output for i in range(3)]
+
+def find_speed(img, orig_blob, pid):
+
     blobs = img.find_blobs([red_threshold])
     if blobs:
         led_failed.off()
@@ -120,8 +112,11 @@ def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
                 x_centor = tmp_x_centor
                 y_centor = tmp_y_centor
 
-        ahead_speed = (square_orig - square) \
-                            + (y_centor_orig - y_centor)
+        pid = setPID(pid, PID.PID.update, (x_centor, y_centor, square))
+        x_centor, y_centor, square = outputPID(pid)
+        print((x_centor, y_centor, square))
+        ahead_speed = (orig_blob[2] - square) \
+                            + (orig_blob[1] - y_centor)
         if (ahead_speed <= 0):
             ahead_speed = 0
         else:
@@ -130,7 +125,7 @@ def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
             else:
                 ahead_speed = int(ahead_speed / 100)
 
-        turn_speed = int((x_centor_orig - x_centor) / 20)
+        turn_speed = int((orig_blob[0] - x_centor) / 20)
         left_speed = ahead_speed - turn_speed
         right_speed = ahead_speed + turn_speed
         return (ahead_speed, max(min(int(left_speed), 10), 0),
@@ -142,37 +137,3 @@ def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
         return ()
 
 
-orig_blob = (160, 82, 500)
-
-while True:
-    uart.write(org_out_buf(0x01, 0x00, 0x03, 0x03))
-
-
-while(True):
-    clock.tick() # Track elapsed milliseconds between snapshots().
-    img = sensor.snapshot() # Take a picture and return the image.
-    #print(clock.fps()) # Note: Your OpenMV Cam runs about half as fast while
-    # connected to your computer. The FPS should increase once disconnected.
-    orient = find_speed(img, orig_blob[0], orig_blob[1], orig_blob[2])
-    if(orient):
-        print(orient) #just for debug
-        led_failed.off()
-        uart.write(org_out_buf(0x01, 0x00, orient[2], orient[1]))
-        led_track.toggle()
-    else:
-        led_failed.on()
-        uart.write(org_out_buf(0x01, 0x00, 0x00, 0x00))
-    if(uart.any()):
-        led_track.off()
-        led_failed.off()
-        in_buf = uart.readall()
-        if check_in_buf(in_buf) == False:
-            continue
-        print(' '.join(hex(x) for x in in_buf[1: 6]))
-        in_buf2 = in_buf[8: ]
-        if check_in_buf(in_buf2) == False:
-            continue
-        else:
-            led_uart.on()
-        print(' '.join(hex(x) for x in in_buf2[1: 6]))
-        led_uart.off()

@@ -6,7 +6,7 @@
 import sensor, image, time, pyb
 
 uart = pyb.UART(3)
-uart.init(500000, 8, None, 1, timeout=10)
+uart.init(128000, 8, None, 1, timeout=10)
 
 led_uart   = pyb.LED(2)
 led_uart.off()
@@ -144,8 +144,8 @@ def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
 
 orig_blob = (160, 82, 500)
 
-while True:
-    uart.write(org_out_buf(0x01, 0x00, 0x03, 0x03))
+#while True:
+#    uart.write(org_out_buf(0x01, 0x00, 0x03, 0x03))
 
 
 while(True):
