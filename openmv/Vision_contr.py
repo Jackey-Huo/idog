@@ -1,29 +1,22 @@
-import sensor, pyb
+import sensor
 import PID
 
-led_uart   = pyb.LED(2)
-led_uart.off()
-
-# blue led to show find target
-led_track  = pyb.LED(1)
-led_track.off()
-
-# red led to show warning
-led_failed = pyb.LED(3)
-led_failed.off()
-# For color tracking to work really well you should ideally be in a very, very,
-# very, controlled enviroment where the lighting is constant...
+# set color threshold for blob detecting
 red_threshold   = (   30,   65,  50,   95,   45,   75)
-# You may need to tweak the above settings for tracking green things...
-# Select an area in the Framebuffer to copy the color settings.
 
-x_centor_orig_sum = 0
-y_centor_orig_sum = 0
-square_orig_sum   = 0
-
-
-format_buf  = [0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16]
+# set uart output format
+format_buf  = [0x69, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16]
 out_buf     = [0x68, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x0d, 0x0a]
+
+
+def initPID(x_pid=(1, 0.2, 0.001), y_pid=(1, 0.2, 0.001),
+                    sq_pid=(1, 0.2, 0.001), orig_blob=(160, 82, 500)):
+    pid = (PID.PID(x_pid), PID.PID(y_pid), PID.PID(sq_pid))
+    for i in range(len(pid)):
+        pid[i].SetPoint = orig_blob[i]
+        pid[i].setSampleTime(0.1)
+    return pid
+
 
 def check_in_buf(in_buf):
     if(len(in_buf) < 8):
@@ -50,8 +43,6 @@ def org_out_buf(cmd, data1=0x00, data2=0x00, data3=0x00, data4=0x00):
         check_bit = check_bit + out_buf[i]
     out_buf[6] = check_bit
     return ''.join(chr(x) for x in out_buf)
-
-
 
 
 def get_orig_blob():
@@ -91,14 +82,11 @@ def get_orig_blob():
 
 #def find_speed(img, x_centor_orig, y_centor_orig, square_orig):
 
-setPID     = lambda pid, func, param: [pid[i].func(param[i]) for i in range(3)]
-outputPID  = lambda pid : [pid[i].output for i in range(3)]
+
 
 def find_speed(img, orig_blob, pid):
-
     blobs = img.find_blobs([red_threshold])
     if blobs:
-        led_failed.off()
         square = 0
         for b in blobs:
             # Draw a rect around the blob.
@@ -112,9 +100,11 @@ def find_speed(img, orig_blob, pid):
                 x_centor = tmp_x_centor
                 y_centor = tmp_y_centor
 
-        pid = setPID(pid, PID.PID.update, (x_centor, y_centor, square))
-        x_centor, y_centor, square = outputPID(pid)
-        print((x_centor, y_centor, square))
+        tmp_blob = (x_centor, y_centor, square)
+        for i in range(len(pid)):
+            pid[i].update(tmp_blob[i])
+        x_centor, y_centor, square = \
+            pid[0].output, pid[1].output, pid[2].output
         ahead_speed = (orig_blob[2] - square) \
                             + (orig_blob[1] - y_centor)
         if (ahead_speed <= 0):
@@ -131,8 +121,6 @@ def find_speed(img, orig_blob, pid):
         return (ahead_speed, max(min(int(left_speed), 10), 0),
             max(min(int(right_speed), 10), 0))
     else: #turn on the red led to show warning
-        led_track.off()
-        led_failed.on()
         print("fuck!")
         return ()
 

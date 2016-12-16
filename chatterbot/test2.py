@@ -11,5 +11,4 @@ chatbot.train("chatterbot.corpus.english")
 
 # 开始对话
 while True:
-    res = chatbot.get_response(raw_input(">"))
-    print res
+    print chatbot.get_response(raw_input(">"))
